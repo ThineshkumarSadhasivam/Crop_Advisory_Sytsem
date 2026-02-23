@@ -11,26 +11,39 @@ class ScannerPage extends StatefulWidget {
 class _ScannerPageState extends State<ScannerPage> {
   bool isScanCompleted = false;
 
-  void _linkDevice(String scannedCode) async {
-    if (isScanCompleted) return;
-    setState(() => isScanCompleted = true);
+void _linkDevice(String scannedCode) async {
+  if (isScanCompleted) return;
 
-    String uid = FirebaseAuth.instance.currentUser!.uid;
-
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'iot_device_id': scannedCode,
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Success: Linked to Device $scannedCode")),
-      );
-      Navigator.pop(context); // Go back to dashboard
-    } catch (e) {
-      setState(() => isScanCompleted = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error linking device")));
-    }
+  // --- NEW VALIDATION CHECK ---
+  // If the QR contains a slash or is a URL, reject it
+  if (scannedCode.contains('/') || scannedCode.contains('http')) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Invalid QR! Please scan the official IoT Kit QR code."),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return; // Stop the process here
   }
+  // ----------------------------
+
+  setState(() => isScanCompleted = true);
+  String uid = FirebaseAuth.instance.currentUser!.uid;
+
+  try {
+    await FirebaseFirestore.instance.collection('users').doc(uid).update({
+      'iot_device_id': scannedCode,
+    });
+
+    if (!mounted) return;
+    Navigator.pop(context); 
+  } catch (e) {
+    setState(() => isScanCompleted = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Error linking device.")),
+    );
+  }
+}
 
   @override
   Widget build(BuildContext context) {
