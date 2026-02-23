@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'scanner_page.dart';
+import 'signup_page.dart'; // Fixed: added missing semicolon
 
 class DashboardPage extends StatelessWidget {
   final Color primaryGreen = const Color(0xFF2E7D32);
   final Color accentGold = const Color(0xFFFBC02D);
+
+  DashboardPage({super.key}); // Added constructor
 
   @override
   Widget build(BuildContext context) {
@@ -20,10 +23,22 @@ class DashboardPage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => FirebaseAuth.instance.signOut(),
-          )
-        ],
-      ),
+            onPressed: () async {
+              // 1. Sign out from Firebase
+              await FirebaseAuth.instance.signOut();
+
+              // 2. Force navigation back to SignupPage and clear memory
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SignupPage()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+        ], // Comma here, not a semicolon
+      ), // Comma here, not a semicolon
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
         builder: (context, userSnapshot) {
@@ -66,9 +81,11 @@ class DashboardPage extends StatelessWidget {
 
   // Section 1: Fetching Real-time Sensor Data
   Widget _buildLiveSensorSection(String deviceId, String soilType) {
+    // Validation
     if (deviceId.contains('/') || deviceId.isEmpty) {
-    return const Center(child: Text("Invalid Device ID linked. Please re-scan."));
-  }
+      return const Center(child: Text("Invalid Device ID linked. Please re-scan."));
+    }
+    
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('sensor_readings').doc(deviceId).snapshots(),
       builder: (context, sensorSnapshot) {
@@ -87,7 +104,6 @@ class DashboardPage extends StatelessWidget {
 
         return Column(
           children: [
-            // NPK Visualizer
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -97,16 +113,10 @@ class DashboardPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            
-            // Soil Moisture Card
             _buildMoistureCard(moisture),
             const SizedBox(height: 20),
-
-            // NOVEL FEATURE: Individual Advisory Engine
             _buildAdvisoryCard(n, p, k, moisture, soilType),
             const SizedBox(height: 20),
-
-            // NOVEL FEATURE: Mandi Price Trends
             _buildMandiTrendCard(),
           ],
         );
@@ -114,7 +124,6 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  // UI Component: Circular Sensor Gauges
   Widget _buildSensorGauge(String label, int value, String unit, Color color) {
     return Container(
       width: 100,
@@ -138,13 +147,11 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  // UI Component: Advisory Engine Logic
   Widget _buildAdvisoryCard(int n, int p, int k, double moist, String soil) {
     String advice = "";
     String status = "Optimal";
     Color statusColor = Colors.green;
 
-    // Logic: Individualized based on Soil Type and NPK
     if (n < 30) {
       advice = "Your Nitrogen is depleted for $soil. Avoid planting Corn now. Plant Legumes to naturally recover soil health.";
       status = "Action Required";
@@ -181,7 +188,6 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  // UI Component: Mandi API Placeholder
   Widget _buildMandiTrendCard() {
     return Card(
       color: Colors.white,
@@ -190,9 +196,6 @@ class DashboardPage extends StatelessWidget {
         title: const Text("Current Market Trend (Mandi)"),
         subtitle: const Text("Paddy: ₹2,300/quintal (↑ 5%)"),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          // Future: Link to Mandi Prediction Page
-        },
       ),
     );
   }
@@ -208,7 +211,6 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  // Keep your existing _buildNoDeviceCard here...
   Widget _buildNoDeviceCard(BuildContext context) {
     return Card(
       elevation: 5,
@@ -226,7 +228,7 @@ class DashboardPage extends StatelessWidget {
                 textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ScannerPage())),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ScannerPage())),
               icon: const Icon(Icons.add_a_photo, color: Colors.white),
               label: const Text("LINK MY SENSOR KIT", style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, minimumSize: const Size(double.infinity, 50)),

@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dashboard_page.dart'; 
+import 'login_page.dart';
+import 'scanner_page.dart';
+
 class SignupPage extends StatefulWidget {
+  const SignupPage({super.key});
   @override
-  _SignupPageState createState() => _SignupPageState();
+  State<SignupPage> createState() => _SignupPageState();
 }
 
 class _SignupPageState extends State<SignupPage> {
+  // Logic Controllers
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
@@ -15,81 +19,76 @@ class _SignupPageState extends State<SignupPage> {
   final _landSizeController = TextEditingController();
 
   String _selectedSoilType = 'Black Soil';
-  String? _verificationId;
-  bool _isOtpSent = false;
-  bool _isLoading = false;
+  String? _vId;
+  bool _otpSent = false;
+  bool _loading = false;
 
   // Agri Theme Colors
   final Color primaryGreen = const Color(0xFF2E7D32); // Deep Green
-  final Color lightGreen = const Color(0xFFE8F5E9);   // Very Light Green background
+  final Color lightGreen = const Color(0xFFE8F5E9);   // Light Green background
   final Color accentBrown = const Color(0xFF795548);  // Earthy Brown
 
-  Future<void> _sendOTP() async {
-    if (_phoneController.text.isEmpty || _phoneController.text.length < 10) {
-      _showSnackBar("Please enter a valid phone number");
+  // STEP 1: Send OTP
+  void _sendOTP() async {
+    if (_phoneController.text.length < 10) {
+      _showSnackBar("Please enter a valid 10-digit number");
       return;
     }
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
     await FirebaseAuth.instance.verifyPhoneNumber(
       phoneNumber: '+91${_phoneController.text.trim()}',
-      verificationCompleted: (PhoneAuthCredential credential) async => await _signInAndSaveData(credential),
-      verificationFailed: (FirebaseAuthException e) {
-        setState(() => _isLoading = false);
+      verificationCompleted: (cred) => _registerInDB(cred),
+      verificationFailed: (e) {
+        setState(() => _loading = false);
         _showSnackBar("Error: ${e.message}");
       },
-      codeSent: (String verificationId, int? resendToken) {
-        setState(() {
-          _verificationId = verificationId;
-          _isOtpSent = true;
-          _isLoading = false;
-        });
-        _showSnackBar("OTP sent to +91${_phoneController.text}");
-      },
-      codeAutoRetrievalTimeout: (String vId) => _verificationId = vId,
+      codeSent: (id, _) => setState(() {
+        _vId = id;
+        _otpSent = true;
+        _loading = false;
+        _showSnackBar("OTP sent to +91 ${_phoneController.text}");
+      }),
+      codeAutoRetrievalTimeout: (id) => _vId = id,
     );
   }
 
-  Future<void> _verifyAndRegister() async {
+  // STEP 2: Verify OTP
+  void _verifyAndSignup() async {
     if (_otpController.text.isEmpty) {
       _showSnackBar("Please enter the 6-digit OTP");
       return;
     }
-    setState(() => _isLoading = true);
-    try {
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId!,
-        smsCode: _otpController.text.trim(),
-      );
-      await _signInAndSaveData(credential);
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnackBar("Invalid OTP. Please try again.");
-    }
+    setState(() => _loading = true);
+    AuthCredential cred = PhoneAuthProvider.credential(
+      verificationId: _vId!,
+      smsCode: _otpController.text.trim(),
+    );
+    _registerInDB(cred);
   }
 
-  Future<void> _signInAndSaveData(PhoneAuthCredential credential) async {
+  // STEP 3: Save to Firestore
+  void _registerInDB(AuthCredential cred) async {
     try {
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-      if (userCredential.user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-          'name': _nameController.text.trim(),
-          'phone': '+91${_phoneController.text.trim()}',
-          'description': _descriptionController.text.trim(),
-          'soil_type': _selectedSoilType,
-          'land_size': _landSizeController.text.trim(),
-          'iot_device_id': '',
-          'created_at': FieldValue.serverTimestamp(),
-        });
-        _showSnackBar("Welcome, ${_nameController.text}!");
-        Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => DashboardPage()),
-        );
-      }
+      UserCredential userCred = await FirebaseAuth.instance.signInWithCredential(cred);
+      
+      await FirebaseFirestore.instance.collection('users').doc(userCred.user!.uid).set({
+        'name': _nameController.text.trim(),
+        'phone': '+91${_phoneController.text.trim()}',
+        'soil_type': _selectedSoilType,
+        'land_size': _landSizeController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'iot_device_id': '', // NEW USER = NO DEVICE LINKED
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+      _showSnackBar("Welcome, ${_nameController.text}!");
+      
+      // Navigate to Scanner
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const ScannerPage()));
     } catch (e) {
-      _showSnackBar("Error: $e");
-    } finally {
-      setState(() => _isLoading = false);
+      setState(() => _loading = false);
+      _showSnackBar("Registration Failed. Try again.");
     }
   }
 
@@ -101,7 +100,7 @@ class _SignupPageState extends State<SignupPage> {
     ));
   }
 
-  // Reusable Input Decoration
+  // Reusable Input Decoration from the Older UI
   InputDecoration _buildInputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
@@ -118,12 +117,12 @@ class _SignupPageState extends State<SignupPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: lightGreen,
-      body: _isLoading
+      body: _loading
           ? Center(child: CircularProgressIndicator(color: primaryGreen))
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  // Header Section
+                  // Header Section (Modern Green Box)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.only(top: 80, bottom: 40, left: 20, right: 20),
@@ -142,7 +141,7 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                   ),
 
-                  // Form Section
+                  // Form Section (Card UI)
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Card(
@@ -156,30 +155,30 @@ class _SignupPageState extends State<SignupPage> {
                             const SizedBox(height: 15),
                             TextField(
                               controller: _phoneController,
-                              enabled: !_isOtpSent,
+                              enabled: !_otpSent,
                               keyboardType: TextInputType.phone,
                               decoration: _buildInputDecoration("Mobile Number", Icons.phone).copyWith(prefixText: "+91 "),
                             ),
-                            if (_isOtpSent) ...[
+                            if (_otpSent) ...[
                               const SizedBox(height: 15),
                               TextField(
                                 controller: _otpController,
                                 keyboardType: TextInputType.number,
-                                decoration: _buildInputDecoration("Enter 6-Digit OTP", Icons.lock_outline),
+                                decoration: _buildInputDecoration("Enter OTP", Icons.lock),
                               ),
                             ],
                             const SizedBox(height: 15),
-                            TextField(controller: _descriptionController, decoration: _buildInputDecoration("Land Description", Icons.eco_outlined)),
+                            TextField(controller: _descriptionController, decoration: _buildInputDecoration("Land Description", Icons.eco)),
                             const SizedBox(height: 15),
                             TextField(
                               controller: _landSizeController,
                               keyboardType: TextInputType.number,
-                              decoration: _buildInputDecoration("Land Size (Acres)", Icons.straighten),
+                              decoration: _buildInputDecoration("Land Size (Acres)", Icons.landscape),
                             ),
                             const SizedBox(height: 15),
                             DropdownButtonFormField<String>(
                               value: _selectedSoilType,
-                              decoration: _buildInputDecoration("Soil Type", Icons.layers_outlined),
+                              decoration: _buildInputDecoration("Soil Type", Icons.layers),
                               items: ['Black Soil', 'Red Soil', 'Sandy Soil', 'Clay Soil']
                                   .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                               onChanged: (v) => setState(() => _selectedSoilType = v!),
@@ -189,25 +188,29 @@ class _SignupPageState extends State<SignupPage> {
                               width: double.infinity,
                               height: 55,
                               child: ElevatedButton(
-                                onPressed: _isOtpSent ? _verifyAndRegister : _sendOTP,
+                                onPressed: _otpSent ? _verifyAndSignup : _sendOTP,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryGreen,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  elevation: 2,
                                 ),
                                 child: Text(
-                                  _isOtpSent ? "VERIFY & REGISTER" : "SEND OTP",
+                                  _otpSent ? "VERIFY & REGISTER" : "SEND OTP",
                                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 15),
+                            TextButton(
+                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const LoginPage())),
+                              child: Text("Already a Farmer? Login here", style: TextStyle(color: accentBrown, fontWeight: FontWeight.bold)),
+                            )
                           ],
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text("Agri Smart", style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                  const Text("Agri Smart Advisor • Secured by Firebase", style: TextStyle(color: Colors.grey, fontSize: 12)),
                   const SizedBox(height: 40),
                 ],
               ),

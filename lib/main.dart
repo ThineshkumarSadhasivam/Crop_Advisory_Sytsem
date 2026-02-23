@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'signup_page.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'login_page.dart';
+import 'signup_page.dart';
+import 'dashboard_page.dart';
+import 'scanner_page.dart';
 void main() async {
-  // This line fixes the 'WidgetsFlutterBinding' error
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // This line fixes the 'Firebase' error
   await Firebase.initializeApp();
-  
-  // This line fixes the 'runApp' error
   runApp(const MyApp());
 }
 
@@ -19,12 +19,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Crop Advisory System',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        useMaterial3: true,
-      ),
-      // This tells the app to start on the Signup Page
+      theme: ThemeData(primarySwatch: Colors.green, useMaterial3: true),
+      // ALWAYS start here as per your request
       home: SignupPage(), 
     );
   }
