@@ -6,6 +6,12 @@ import 'login_page.dart';
 import 'signup_page.dart';
 import 'dashboard_page.dart';
 import 'scanner_page.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(dynamic message) async {
+  // This is a placeholder for background notifications
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();

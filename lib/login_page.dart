@@ -18,10 +18,10 @@ class _LoginPageState extends State<LoginPage> {
   bool _otpSent = false;
   bool _loading = false;
 
-  // Agri Theme Colors (Matching Signup Page)
-  final Color primaryGreen = const Color(0xFF2E7D32); // Deep Green
-  final Color lightGreen = const Color(0xFFE8F5E9);   // Light Green background
-  final Color accentBrown = const Color(0xFF795548);  // Earthy Brown
+  // Agri Theme Colors
+  final Color primaryGreen = const Color(0xFF2E7D32); 
+  final Color lightGreen = const Color(0xFFE8F5E9);   
+  final Color accentBrown = const Color(0xFF795548);  
 
   // STEP 1: Check if phone exists in DB before sending OTP
   void _checkFarmerAndSendOTP() async {
@@ -33,32 +33,37 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _loading = true);
     String fullPhone = "+91${_phone.text.trim()}";
 
-    // Query Firestore to see if the farmer is already registered
-    var userQuery = await FirebaseFirestore.instance
-        .collection('users')
-        .where('phone', isEqualTo: fullPhone)
-        .get();
+    try {
+      // Query Firestore to see if the farmer is already registered
+      var userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phone', isEqualTo: fullPhone)
+          .get();
 
-    if (userQuery.docs.isEmpty) {
+      if (userQuery.docs.isEmpty) {
+        setState(() => _loading = false);
+        _showSnackBar("Account not found. Please register first.", isError: true);
+      } else {
+        // User Exists -> Proceed to Firebase OTP
+        await FirebaseAuth.instance.verifyPhoneNumber(
+          phoneNumber: fullPhone,
+          verificationCompleted: (cred) => _verifyAndRoute(cred),
+          verificationFailed: (e) {
+            setState(() => _loading = false);
+            _showSnackBar("Error: ${e.message}", isError: true);
+          },
+          codeSent: (id, _) => setState(() { 
+            _vId = id; 
+            _otpSent = true; 
+            _loading = false; 
+            _showSnackBar("OTP sent to +91 ${_phone.text}");
+          }),
+          codeAutoRetrievalTimeout: (id) => _vId = id,
+        );
+      }
+    } catch (e) {
       setState(() => _loading = false);
-      _showSnackBar("Account not found. Please register first.", isError: true);
-    } else {
-      // User Exists -> Proceed to Firebase OTP
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: fullPhone,
-        verificationCompleted: (cred) => _verifyAndRoute(cred),
-        verificationFailed: (e) {
-          setState(() => _loading = false);
-          _showSnackBar("Error: ${e.message}", isError: true);
-        },
-        codeSent: (id, _) => setState(() { 
-          _vId = id; 
-          _otpSent = true; 
-          _loading = false; 
-          _showSnackBar("OTP sent to +91 ${_phone.text}");
-        }),
-        codeAutoRetrievalTimeout: (id) => _vId = id,
-      );
+      _showSnackBar("Database error. Try again.");
     }
   }
 
@@ -68,31 +73,46 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
     setState(() => _loading = true);
-    AuthCredential cred = PhoneAuthProvider.credential(verificationId: _vId!, smsCode: _otp.text.trim());
+    AuthCredential cred = PhoneAuthProvider.credential(
+      verificationId: _vId!, 
+      smsCode: _otp.text.trim()
+    );
     _verifyAndRoute(cred);
   }
 
-  // STEP 2: Final Routing based on Device ID
+  // STEP 2: Final Routing based on Device ID List
   void _verifyAndRoute(AuthCredential cred) async {
     try {
       UserCredential userCred = await FirebaseAuth.instance.signInWithCredential(cred);
       String uid = userCred.user!.uid;
 
+      // Fetch the individual farmer's document
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      String deviceId = doc['iot_device_id'] ?? "";
+      
+      // FIXED: Get the LIST of devices instead of a single ID string
+      List<dynamic> deviceList = doc['iot_devices'] ?? [];
 
       if (!mounted) return;
 
-      if (deviceId.isNotEmpty) {
-        // ID EXISTS: Go to Dashboard
-        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (c) => DashboardPage()), (route) => false);
+      if (deviceList.isNotEmpty) {
+        // ID(S) EXIST: Go to Dashboard
+        Navigator.pushAndRemoveUntil(
+          context, 
+          MaterialPageRoute(builder: (c) => const DashboardPage()), 
+          (route) => false
+        );
       } else {
-        // NO ID: Go to Scanner
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const ScannerPage()));
+        // NO ID: Go to Scanner to link the first node
+        Navigator.pushReplacement(
+          context, 
+          MaterialPageRoute(builder: (c) => const ScannerPage())
+        );
       }
     } catch (e) {
-      setState(() => _loading = false);
-      _showSnackBar("Login Failed. Please check OTP.", isError: true);
+      if (mounted) {
+        setState(() => _loading = false);
+        _showSnackBar("Login Failed. Please check OTP.", isError: true);
+      }
     }
   }
 
@@ -104,7 +124,6 @@ class _LoginPageState extends State<LoginPage> {
     ));
   }
 
-  // Consistent Input Decoration
   InputDecoration _buildInputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
@@ -126,7 +145,7 @@ class _LoginPageState extends State<LoginPage> {
         : SingleChildScrollView(
             child: Column(
               children: [
-                // Header Section
+                // Clean Header Section
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.only(top: 100, bottom: 50),
@@ -146,7 +165,7 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 30),
 
-                // Login Form Card
+                // Form Card
                 Padding(
                   padding: const EdgeInsets.all(25.0),
                   child: Card(

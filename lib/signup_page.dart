@@ -73,11 +73,12 @@ class _SignupPageState extends State<SignupPage> {
       
       await FirebaseFirestore.instance.collection('users').doc(userCred.user!.uid).set({
         'name': _nameController.text.trim(),
+        'cropping_style': "", 
         'phone': '+91${_phoneController.text.trim()}',
         'soil_type': _selectedSoilType,
         'land_size': _landSizeController.text.trim(),
         'description': _descriptionController.text.trim(),
-        'iot_device_id': '', // NEW USER = NO DEVICE LINKED
+        'iot_device_id': [], // NEW USER = NO DEVICE LINKED
         'created_at': FieldValue.serverTimestamp(),
       });
 
